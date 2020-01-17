@@ -153,7 +153,11 @@ program get_bands
                             mz(orb, ion, k-1, band2) * mz(orb, ion, k, band)
             end do
           end do
-          dist = 1.d0 - dist/dsqrt(n1)/dsqrt(n2) + dE_weight*dE
+          if( n1 > 0.d0 .and. n2 > 0.d0 )then
+            dist = 1.d0 - dist/dsqrt(n1)/dsqrt(n2) + dE_weight*dE
+          else
+            dist = dE_weight*dE
+          end if
           band3 = ordered_band(k-1, band2)
           if( dist < dist_prev .and. (.not. band_assigned(band3)) )then
             dist_prev = dist
