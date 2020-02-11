@@ -37,13 +37,13 @@ module crystal_special
 
 
 
-  subroutine special_lines(crystal, n_lines, max_anchor_points, n_anchor_points, anchor_point, labels)
+  subroutine special_lines(crystal, n_lines, max_anchor_points, n_anchor_points, anchor_point, anchor_point_position, labels)
 
     implicit none
 
     character*64, intent(in) :: crystal
     integer, intent(inout) :: n_lines, max_anchor_points
-    integer, allocatable, intent(inout) :: n_anchor_points(:)
+    integer, allocatable, intent(inout) :: n_anchor_points(:), anchor_point_position(:,:)
     real*8, allocatable, intent(inout) :: anchor_point(:, :, :)
     character*1, allocatable, intent(inout) :: labels(:, :)
 
@@ -62,6 +62,7 @@ module crystal_special
       allocate( n_anchor_points(1:n_lines) )
       allocate( anchor_point(1:3, 1:max_anchor_points, 1:n_lines) )
       allocate( labels(1:max_anchor_points, 1:n_lines) )
+      allocate( anchor_point_position( 1:max_anchor_points, 1:n_lines) )
       n_anchor_points(1) = 4
       labels(1:4, 1) = (/ 'L', 'G', 'X', 'U' /)
       anchor_point( 1:3, 1, 1 ) = (/ 0.5d0, 0.5d0, 0.5d0 /)

@@ -1,9 +1,11 @@
 program get_bands
 
+  use printouts
+
   implicit none
 
 ! norbs should be changed to accept any number, depending on the format of the PROCAR file !!!!!!!!!!!!!!!!!!!!!!!
-  integer :: nk, nbands, kstart, nions, norbs, orb, k, band, j, iostatus, ijunk, ion
+  integer :: nk, nbands, kstart, nions, norbs, orb, k, band, j, iostatus, ijunk, ion, i
   integer :: band2, band_match, band3, kend, ktotal
   real*8, allocatable :: proj(:,:,:,:), energy(:,:), mx(:,:,:,:), my(:,:,:,:), mz(:,:,:,:)
   real*8, allocatable :: kpoint(:,:)
@@ -15,7 +17,15 @@ program get_bands
   real*8 :: proj_w = 1.d0
   real*8, allocatable :: proj_total(:,:,:)
   integer :: iostatus2, nkpts, n_lines, line
-  integer, allocatable :: linestart(:)
+  integer, allocatable :: linestart(:), n_anchor_points(:), anchor_point_position(:,:)
+  character*64 :: keyword
+  character*1 :: keyword_first, crap
+  character*1, allocatable :: labels(:, :)
+  character*16 :: routine
+  character*1024 :: gnuplot_tags(1:5)
+  logical :: gnuplot, gnuplot_tags_logical(1:5) = .false.
+  integer :: max_anchor_points
+
 
 !  read(*,*) kstart, kend, filename, ecut, dE_weight
 !  nk = kend - kstart + 1
@@ -26,9 +36,64 @@ program get_bands
   read(10, *)
   read(10, *) n_lines, nkpts
   allocate( linestart(1:n_lines) )
+  allocate( n_anchor_points(1:n_lines) )
   read(10,*) linestart(1:n_lines)
   read(10,*) ecut, dE_weight
+  read(10,*) max_anchor_points, n_anchor_points(1:n_lines)
+  allocate( anchor_point_position( 1:max_anchor_points, 1:n_lines) )
+  allocate( labels( 1:max_anchor_points, 1:n_lines) )
+  do i = 1, n_lines
+    read(10, *) anchor_point_position(1:max_anchor_points, i)
+  end do
+  do i = 1, n_lines
+    do j = 1, n_anchor_points(i)
+      read(10,'(A1)',advance='no',iostat=iostatus) labels(j, i)
+    end do
+  end do
   close(10)
+
+
+
+! This subroutine opens the input file as unit 10
+  routine = 'get_bands'
+  call check_input_file(routine)
+  iostatus = 0
+  do while(iostatus==0)
+    read(10, *, iostat=iostatus) keyword
+    keyword = trim(keyword)
+    if(iostatus/=0)then
+      exit
+    end if
+    keyword_first = keyword
+    if( keyword_first=='#' .or. keyword_first=='!' )then
+      continue
+    else if( keyword == 'gnuplot' )then
+      backspace(10)
+      read(10,*) crap, crap, gnuplot
+    else if( keyword == 'gnuplot_title' )then
+      backspace(10)
+      read(10,*) crap, crap, gnuplot_tags(1)
+      gnuplot_tags_logical(1) = .true.
+    else if( keyword == 'gnuplot_xlabel' )then
+      backspace(10)
+      read(10,*) crap, crap, gnuplot_tags(2)
+      gnuplot_tags_logical(2) = .true.
+    else if( keyword == 'gnuplot_ylabel' )then
+      backspace(10)
+      read(10,*) crap, crap, gnuplot_tags(3)
+      gnuplot_tags_logical(3) = .true.
+    else if( keyword == 'gnuplot_style' )then
+      backspace(10)
+      read(10,*) crap, crap, gnuplot_tags(4)
+      gnuplot_tags_logical(4) = .true.
+    else if( keyword == 'gnuplot_size' )then
+      backspace(10)
+      read(10,*) crap, crap, gnuplot_tags(5)
+      gnuplot_tags_logical(5) = .true.
+    end if
+  end do
+  close(10)
+
 
 
   do line = 1, n_lines
@@ -224,5 +289,15 @@ program get_bands
   deallocate( proj, proj_total, mx, my, mz, kpoint, correct_band, ordered_band, energy, band_assigned )
 
   end do
+
+
+
+! Generate gnuplot script
+ if( gnuplot )then
+   call create_gnuplot_script(n_lines, nbands, n_anchor_points, anchor_point_position, nkpts, &
+                              labels, linestart, gnuplot_tags, gnuplot_tags_logical)
+ end if
+
+
 
 end program
