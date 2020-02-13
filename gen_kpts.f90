@@ -2,6 +2,7 @@ program gen_kpts
 
   use printouts
   use crystal_special
+  use functions
 
   implicit none
 
@@ -17,6 +18,9 @@ program gen_kpts
   real*8, allocatable :: anchor_point(:, :, :), kpts(:, :)
   logical :: do_special_lines = .false.
   real*8 :: kstep = 0.1d0, kdist, kdist_vec(1:3), ecut = 1.d0, dE_weight = 0.d0
+  real*8 :: lattice_a(1:3) = 0.d0, lattice_b(1:3) = 0.d0, lattice_c(1:3) = 0.d0
+  real*8 :: recip1(1:3) = 0.d0, recip2(1:3) = 0.d0, recip3(1:3) = 0.d0
+  real*8 :: pi = dacos(-1.d0), g_matrix(1:3,1:3)
 
   call print_welcome()
 
@@ -112,6 +116,16 @@ program gen_kpts
     else if( keyword == 'dE_weight' )then
       backspace(10)
       read(10,*) crap, crap, dE_weight
+    else if( keyword == 'lattice' )then
+      backspace(10)
+      read(10,*) crap, crap, lattice_a(1:3), lattice_b(1:3), lattice_c(1:3)
+!     Create the reciprocal lattice vectors from the real space lattice vectors:
+      call cross_product(lattice_b, lattice_c, recip1)
+      recip1 = 2.d0*pi * recip1 / dot_product(lattice_a, recip1)
+      call cross_product(lattice_c, lattice_a, recip2)
+      recip2 = 2.d0*pi * recip2 / dot_product(lattice_b, recip2)
+      call cross_product(lattice_a, lattice_b, recip3)
+      recip3 = 2.d0*pi * recip3 / dot_product(lattice_c, recip3)
     else if( keyword == 'input_file' )then
       backspace(10)
       read(10,*) crap, crap, input_file
@@ -168,6 +182,19 @@ program gen_kpts
       end do
     end do
   end if
+
+
+
+
+
+! Transform from direct to Cartesian coordinates
+  do i = 1, n_lines
+    do j = 1, n_anchor_points(i)
+      anchor_point(1:3, j, i) = anchor_point(1, j, i)*recip1(1:3) + &
+                                anchor_point(2, j, i)*recip2(1:3) + &
+                                anchor_point(3, j, i)*recip3(1:3)
+    end do
+  end do
 
 
 
@@ -239,6 +266,22 @@ program gen_kpts
       write(*,*) kpts(1:3,i)
     end do
   end if
+
+
+
+
+
+
+! Transform from direct coordinates to Cartesian
+  g_matrix(1:3, 1) = recip1(1:3)
+  g_matrix(1:3, 2) = recip2(1:3)
+  g_matrix(1:3, 3) = recip3(1:3)
+  g_matrix = matinv3(g_matrix)
+  do i = 1, nkpts
+    kpts(1:3, i) = matmul( g_matrix, kpts(1:3,i) )
+  end do
+
+
 
 
 
