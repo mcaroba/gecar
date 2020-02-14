@@ -8,11 +8,11 @@ program get_bands
   integer :: nk, nbands, kstart, nions, norbs, orb, k, band, j, iostatus, ijunk, ion, i
   integer :: band2, band_match, band3, kend, ktotal
   real*8, allocatable :: proj(:,:,:,:), energy(:,:), mx(:,:,:,:), my(:,:,:,:), mz(:,:,:,:)
-  real*8, allocatable :: kpoint(:,:)
+  real*8, allocatable :: kpoint(:,:), dist_matrix(:,:)
   character*64 :: cjunk, filename, output_filename
   integer, allocatable :: correct_band(:,:), ordered_band(:,:)
-  real*8 :: ecut, dist, dist_prev, dE, dE_prev, n1, n2, dE_weight, ene, dk, dE2, dk2, dk3, dE3
-  logical, allocatable :: band_assigned(:)
+  real*8 :: ecut, dist, dist_prev, dE, dE_prev, n1, n2, dE_weight, ene, dk, dE2, dk2, dk3, dE3, dEdk
+  logical, allocatable :: band_assigned(:), band2_assigned(:)
   logical :: spin_orbit = .false.
   real*8 :: proj_w = 1.d0
   real*8, allocatable :: proj_total(:,:,:)
@@ -24,7 +24,7 @@ program get_bands
   character*16 :: routine
   character*1024 :: gnuplot_tags(1:5)
   logical :: gnuplot, gnuplot_tags_logical(1:5) = .false.
-  integer :: max_anchor_points
+  integer :: max_anchor_points, band_pick, band2_pick
 
 
 !  read(*,*) kstart, kend, filename, ecut, dE_weight
@@ -137,6 +137,8 @@ program get_bands
   allocate( energy(1:nk, 1:nbands) )
   energy = 0.d0
   allocate( band_assigned(1:nbands) )
+  allocate( band2_assigned(1:nbands) )
+  allocate( dist_matrix(1:nbands, 1:nbands) )
   band_assigned = .false.
 
   iostatus = 0
@@ -165,7 +167,7 @@ program get_bands
       end do
       read(10,*) cjunk, proj_total(1:norbs, k, band)
       ijunk = 0
-      read(10, fmt="(I1)", iostat=iostatus2) ijunk
+      read(10, *, iostat=iostatus2) ijunk
       if( ijunk == 1 )then
         spin_orbit = .true.
         backspace(10)
@@ -204,52 +206,59 @@ program get_bands
 ! Now we check for the following k points which band resembles the most the bands at the
 ! previous k point
   do k = 2, nk
+!   Create a distance matrix
     band_assigned = .false.
+    band2_assigned = .false.
+    dist_matrix = 1.d100
     do band = 1, nbands
-!     For each band at the present k point, we compute the similarity with every band in the previous
-!     k point provided that the two energy values are less than ecut apart
-      dist_prev = 1.d100
       do band2 = 1, nbands
         ene = energy(k-1, band2)
         dE = dsqrt( (ene - energy(k, band))**2 )
         if( dE < ecut)then
           dist = 0.d0
-!          n1 = 0.d0
-!          n2 = 0.d0
           do orb = 1, norbs
             do ion = 1, nions
-!             This overlap scheme gives problems
-!              n1 = n1 + proj_w*proj(orb, ion, k-1, band2)**2 + mx(orb, ion, k-1, band2)**2 + &
-!                        my(orb, ion, k-1, band2)**2 + mz(orb, ion, k-1, band2)**2
-!              n2 = n2 + proj_w*proj(orb, ion, k, band)**2 + mx(orb, ion, k, band)**2 + &
-!                        my(orb, ion, k, band)**2 + mz(orb, ion, k, band)**2
-!              dist = dist + proj_w*proj(orb, ion, k-1, band2) * proj(orb, ion, k, band) + &
-!                            mx(orb, ion, k-1, band2) * mx(orb, ion, k, band) + &
-!                            my(orb, ion, k-1, band2) * my(orb, ion, k, band) + &
-!                            mz(orb, ion, k-1, band2) * mz(orb, ion, k, band)
               dist = dist + proj_w*(proj(orb, ion, k-1, band2) - proj(orb, ion, k, band))**2 + &
                             (mx(orb, ion, k-1, band2) - mx(orb, ion, k, band))**2 + &
-                            (my(orb, ion, k-1, band2) * my(orb, ion, k, band))**2 + &
-                            (mz(orb, ion, k-1, band2) * mz(orb, ion, k, band))**2
+                            (my(orb, ion, k-1, band2) - my(orb, ion, k, band))**2 + &
+                            (mz(orb, ion, k-1, band2) - mz(orb, ion, k, band))**2
             end do
           end do
           dist = dist + dE_weight*dE
-!          if( n1 > 0.d0 .and. n2 > 0.d0 )then
-!            dist = 1.d0 - dist/dsqrt(n1)/dsqrt(n2) + dE_weight*dE
-!          else
-!            dist = 1.d0 + dE_weight*dE
+!          band3 = ordered_band(k-1, band2)
+!          if( dist < dist_prev .and. (.not. band_assigned(band3)) )then
+!            dist_prev = dist
+!            dE_prev = dE
+!            band_match = band3
 !          end if
-          band3 = ordered_band(k-1, band2)
-          if( dist < dist_prev .and. (.not. band_assigned(band3)) )then
-            dist_prev = dist
-            dE_prev = dE
-            band_match = band3
-          end if
+           dist_matrix(band, band2) = dist
         end if
       end do
-      correct_band(k, band_match) = band
-      ordered_band(k, band) = band_match
-      band_assigned(band_match) = .true.
+!      correct_band(k, band_match) = band
+!      ordered_band(k, band) = band_match
+!      band_assigned(band_match) = .true.
+    end do
+!   Now we find the minima in the distance matrix to assign the bands
+    do while( .not. all(band_assigned) )
+      dist_prev = 1.d100
+      do band = 1, nbands
+        if( .not. band_assigned(band) )then
+          do band2 = 1, nbands
+            if( .not. band2_assigned(band2) )then
+              dist = dist_matrix(band, band2)
+              if( dist < dist_prev )then
+                band_pick = band
+                band2_pick = band2
+              end if
+            end if
+          end do
+        end if
+      end do
+      band_match = ordered_band(k-1, band2_pick)
+      correct_band(k, band_match) = band_pick
+      ordered_band(k, band_pick) = band_match
+      band_assigned(band_pick) = .true.
+      band2_assigned(band2_pick) = .true.
     end do
   end do
 

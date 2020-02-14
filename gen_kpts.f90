@@ -16,7 +16,7 @@ program gen_kpts
   integer :: iostatus, n_lines, max_anchor_points, n_anchor, iostatus2, i, ibeg, iend, j, nkpts, extra_kpts, k
   integer, allocatable :: n_anchor_points(:), linestart(:), anchor_point_position(:,:)
   real*8, allocatable :: anchor_point(:, :, :), kpts(:, :)
-  logical :: do_special_lines = .false.
+  logical :: do_special_lines = .false., old_behavior = .false.
   real*8 :: kstep = 0.1d0, kdist, kdist_vec(1:3), ecut = 1.d0, dE_weight = 0.d0
   real*8 :: lattice_a(1:3) = 0.d0, lattice_b(1:3) = 0.d0, lattice_c(1:3) = 0.d0
   real*8 :: recip1(1:3) = 0.d0, recip2(1:3) = 0.d0, recip3(1:3) = 0.d0
@@ -116,6 +116,9 @@ program gen_kpts
     else if( keyword == 'dE_weight' )then
       backspace(10)
       read(10,*) crap, crap, dE_weight
+    else if( keyword == 'old_behavior' )then
+      backspace(10)
+      read(10,*) crap, crap, old_behavior
     else if( keyword == 'lattice' )then
       backspace(10)
       read(10,*) crap, crap, lattice_a(1:3), lattice_b(1:3), lattice_c(1:3)
@@ -187,6 +190,7 @@ program gen_kpts
 
 
 
+
 ! Transform from direct to Cartesian coordinates
   do i = 1, n_lines
     do j = 1, n_anchor_points(i)
@@ -218,7 +222,11 @@ program gen_kpts
       kdist = sqrt( (anchor_point(1, j+1, i) - anchor_point(1, j, i))**2 + &
                     (anchor_point(2, j+1, i) - anchor_point(2, j, i))**2 + &
                     (anchor_point(3, j+1, i) - anchor_point(3, j, i))**2 )
-      extra_kpts = nint(kdist/kstep) - 1
+      if( old_behavior )then
+        extra_kpts = nint(kdist/kstep) - 3
+      else
+        extra_kpts = nint(kdist/kstep) - 1
+      end if
       if( extra_kpts > 0 )then
         nkpts = nkpts + extra_kpts
       end if
@@ -239,7 +247,11 @@ program gen_kpts
       kdist = sqrt( (anchor_point(1, j+1, i) - anchor_point(1, j, i))**2 + &
                     (anchor_point(2, j+1, i) - anchor_point(2, j, i))**2 + &
                     (anchor_point(3, j+1, i) - anchor_point(3, j, i))**2 )
-      extra_kpts = nint(kdist/kstep) - 1
+      if( old_behavior )then
+        extra_kpts = nint(kdist/kstep) - 3
+      else
+        extra_kpts = nint(kdist/kstep) - 1
+      end if
       if( extra_kpts > 0 )then
         kdist_vec(1:3) = (/ anchor_point(1, j+1, i) - anchor_point(1, j, i), &
                             anchor_point(2, j+1, i) - anchor_point(2, j, i), &
