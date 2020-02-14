@@ -239,7 +239,8 @@ program get_bands
 !      band_assigned(band_match) = .true.
     end do
 !   Now we find the minima in the distance matrix to assign the bands
-    do while( .not. all(band_assigned) )
+!    do while( .not. all(band_assigned) )
+    do i = 1, nbands
       dist_prev = 1.d100
       do band = 1, nbands
         if( .not. band_assigned(band) )then
