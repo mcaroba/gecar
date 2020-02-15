@@ -140,6 +140,7 @@ program get_bands
   allocate( band2_assigned(1:nbands) )
   allocate( dist_matrix(1:nbands, 1:nbands) )
   band_assigned = .false.
+  band2_assigned = .false.
 
   iostatus = 0
   k = 0
@@ -168,9 +169,9 @@ program get_bands
       read(10,*) cjunk, proj_total(1:norbs, k, band)
       ijunk = 0
       read(10, *, iostat=iostatus2) ijunk
+      backspace(10)
       if( ijunk == 1 )then
         spin_orbit = .true.
-        backspace(10)
         do ion = 1, nions
           read(10, *) ijunk, mx(1:norbs, ion, k, band)
         end do
@@ -209,7 +210,7 @@ program get_bands
 !   Create a distance matrix
     band_assigned = .false.
     band2_assigned = .false.
-    dist_matrix = 1.d100
+    dist_matrix = 1.d99
     do band = 1, nbands
       do band2 = 1, nbands
         ene = energy(k-1, band2)
@@ -264,10 +265,11 @@ program get_bands
   end do
 
 
+
 ! Check that all bands are assigned
   do k = 1, nk
     do band = 1, nbands
-      if( correct_band(k, band) == 0 )then
+      if( correct_band(k, band) == 0 .or. correct_band(k, band) > nbands )then
         write(*,*)'                                       |'
         write(*,*)'ERROR: One or more bands could not be  |  <-- ERROR'
         write(*,*)'assigned. This error is usually        |'
