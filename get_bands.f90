@@ -11,7 +11,7 @@ program get_bands
   real*8, allocatable :: kpoint(:,:), dist_matrix(:,:)
   character*64 :: cjunk, filename, output_filename
   integer, allocatable :: correct_band(:,:), ordered_band(:,:)
-  real*8 :: ecut, dist, dist_prev, dE, dE_prev, n1, n2, dE_weight, ene, dk, dE2, dk2, dk3, dE3, dEdk
+  real*8 :: ecut, dist, dist_prev, dE, dE_prev, n1, n2, dE_weight, ene, dk(1:3), dE2, dk2(1:3), dk3, dE3, dEdk
   logical, allocatable :: band_assigned(:), band2_assigned(:)
   logical :: spin_orbit = .false.
   real*8 :: proj_w = 1.d0
@@ -23,7 +23,7 @@ program get_bands
   character*1, allocatable :: labels(:, :)
   character*16 :: routine
   character*1024 :: gnuplot_tags(1:5)
-  logical :: gnuplot, gnuplot_tags_logical(1:5) = .false.
+  logical :: gnuplot, gnuplot_tags_logical(1:5) = .false., use_derivative
   integer :: max_anchor_points, band_pick, band2_pick
 
 
@@ -207,37 +207,50 @@ program get_bands
 ! Now we check for the following k points which band resembles the most the bands at the
 ! previous k point
   do k = 2, nk
+!   Predict energy based on derivative dE/dk. Here we obtain dk just to check whether there
+!   has been a change in k-space direction
+    if( k == 2 )then
+      use_derivative = .false.
+    else
+      dk = (kpoint(k, 1:3) - kpoint(k-1, 1:3)) / dsqrt(dot_product(kpoint(k, 1:3)-kpoint(k-1, 1:3), &
+                                                                   kpoint(k, 1:3)-kpoint(k-1, 1:3)))
+      dk2 = (kpoint(k-1, 1:3) - kpoint(k-2, 1:3)) / dsqrt(dot_product(kpoint(k-1, 1:3)-kpoint(k-2, 1:3), &
+                                                                   kpoint(k-1, 1:3)-kpoint(k-2, 1:3)))
+      if( dot_product(dk, dk2) < 0.999999d0 )then
+        use_derivative = .false.
+      else
+      use_derivative = .true.
+      end if
+    end if
 !   Create a distance matrix
     band_assigned = .false.
     band2_assigned = .false.
     dist_matrix = 1.d99
     do band = 1, nbands
       do band2 = 1, nbands
-        ene = energy(k-1, band2)
+!       Predict the expected energy
+        if( use_derivative )then
+          band3 = ordered_band(k-1, band2)
+!         Since dk is fixed, E + dE/dk * dk has this expression:
+          ene = 2.d0*energy(k-1, band2) - energy(k-2, correct_band(k-2, band3))
+        else
+          ene = energy(k-1, band2)
+        end if
         dE = dsqrt( (ene - energy(k, band))**2 )
         if( dE < ecut)then
           dist = 0.d0
-          do orb = 1, norbs
-            do ion = 1, nions
+          do ion = 1, nions
+            do orb = 1, norbs
               dist = dist + proj_w*(proj(orb, ion, k-1, band2) - proj(orb, ion, k, band))**2 + &
                             (mx(orb, ion, k-1, band2) - mx(orb, ion, k, band))**2 + &
                             (my(orb, ion, k-1, band2) - my(orb, ion, k, band))**2 + &
                             (mz(orb, ion, k-1, band2) - mz(orb, ion, k, band))**2
             end do
           end do
-          dist = dist + dE_weight*dE
-!          band3 = ordered_band(k-1, band2)
-!          if( dist < dist_prev .and. (.not. band_assigned(band3)) )then
-!            dist_prev = dist
-!            dE_prev = dE
-!            band_match = band3
-!          end if
+          dist = dist + dE_weight*dE**2
            dist_matrix(band, band2) = dist
         end if
       end do
-!      correct_band(k, band_match) = band
-!      ordered_band(k, band) = band_match
-!      band_assigned(band_match) = .true.
     end do
 !   Now we find the minima in the distance matrix to assign the bands
 !    do while( .not. all(band_assigned) )
@@ -251,6 +264,7 @@ program get_bands
               if( dist < dist_prev )then
                 band_pick = band
                 band2_pick = band2
+                dist_prev = dist
               end if
             end if
           end do
@@ -298,7 +312,8 @@ program get_bands
 
 
 
-  deallocate( proj, proj_total, mx, my, mz, kpoint, correct_band, ordered_band, energy, band_assigned )
+  deallocate( proj, proj_total, mx, my, mz, kpoint, correct_band, ordered_band, energy, band_assigned, &
+              band2_assigned, dist_matrix )
 
   end do
 
